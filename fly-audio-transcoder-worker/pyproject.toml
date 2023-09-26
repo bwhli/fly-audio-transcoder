@@ -11,6 +11,7 @@ python = "^3.11"
 python-dotenv = "^1.0.0"
 requests = "^2.31.0"
 pydub = "^0.25.1"
+rich = "^13.5.3"
 
 
 [build-system]

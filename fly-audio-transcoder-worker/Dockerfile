@@ -1,4 +1,4 @@
-FROM python:3.11-bookworm
+FROM python:3.11-slim-buster
 
 RUN apt -y update && apt -y install ffmpeg
 

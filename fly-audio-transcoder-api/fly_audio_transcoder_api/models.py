@@ -1,7 +1,7 @@
 import uuid
 
-from beanie import Document, Field
-from pydantic import BaseModel
+from beanie import Document, Indexed
+from pydantic import BaseModel, Field
 
 
 class InputFormat(BaseModel):
@@ -20,11 +20,13 @@ class OutputFormat(BaseModel):
 
 class Job(Document):
     id: uuid.UUID = Field(default_factory=uuid.uuid4)
-    status: str
-    machine_id: str | None = None
+    status: Indexed(str) = "created"
+    machine_id: Indexed(str) | None = None
     file_name: str | None = None
     input_format: InputFormat | None = None
     output_formats: list[OutputFormat] | None = None
+    download_url: Indexed(str) | None = None
+    upload_url: Indexed(str) | None = None
 
     class Settings:
         name = "jobs"
