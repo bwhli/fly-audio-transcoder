@@ -18,7 +18,7 @@ def upload_source_file(
 
 
 async def upload_to_s3():
-    async with aioboto3.client("s3") as s3:
+    async with aioboto3.client("s3"):
         pass
     return
 

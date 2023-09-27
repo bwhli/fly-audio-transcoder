@@ -2,8 +2,7 @@ import uuid
 
 import motor
 from beanie import init_beanie
-from fastapi import FastAPI, status
-from fastapi.exceptions import HTTPException
+from fastapi import FastAPI
 from fly_python_sdk.fly import Fly
 from fly_python_sdk.models.machine import FlyMachine, FlyMachineConfig
 from pydantic import BaseModel
@@ -16,7 +15,7 @@ from fly_audio_transcoder_api import (
     FLY_WORKER_APP_NAME,
     FLY_WORKER_IMAGE,
 )
-from fly_audio_transcoder_api.models import AudioFormat, Job, Source, Transcode
+from fly_audio_transcoder_api.models import Job, Transcode
 from fly_audio_transcoder_api.utils import (
     generate_presigned_s3_download_url,
     generate_presigned_s3_upload_url,
@@ -50,6 +49,34 @@ async def get_job(
     job_id: uuid.UUID,
 ):
     job = await Job.get(job_id)
+    return {
+        "data": job,
+    }
+
+
+@app.post("/jobs/{job_id}/status/finished/")
+async def complete_job(
+    job_id: uuid.UUID,
+):
+    job = await Job.get(job_id)
+
+    # Destroy the Fly Machine.
+    machine = (
+        Fly(FLY_API_TOKEN)
+        .Org(FLY_ORG_SLUG)
+        .App(FLY_WORKER_APP_NAME)
+        .Machine(job.machine_id)
+    )
+    await machine.destroy()
+
+    # Generate a presigned download URL for transcoded file.
+    job.transcode.download_url = generate_presigned_s3_download_url(
+        object_key=f"transcodes/{job.id}.{job.transcode.format.extension}",
+        expires_in=86400,
+    )
+
+    await job.save()
+
     return {
         "data": job,
     }

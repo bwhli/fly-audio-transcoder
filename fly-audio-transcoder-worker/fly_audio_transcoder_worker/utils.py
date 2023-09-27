@@ -1,4 +1,3 @@
-import logging
 import subprocess
 from pathlib import Path
 
@@ -13,7 +12,8 @@ def get_job_details():
     return r.json()
 
 
-def mark_job_as_complete():
+def mark_job_as_finished():
+    requests.post(f"{API_URL}/jobs/{JOB_ID}/status/finished/")
     return
 
 
@@ -28,6 +28,7 @@ def transcode_audio_file(
     """
     command = [
         "ffmpeg",
+        "-y",
         "-i",
         str(input_file),
         "-b:a",
@@ -40,7 +41,6 @@ def transcode_audio_file(
     ]
 
     print(f"Triggering ffmpeg with this command: {command}")
-
     subprocess.run(command)
     return
 
@@ -81,5 +81,9 @@ def add_extension_to_source_audio_file(
 
 def upload_transcoded_audio_file(
     upload_url: str,
-):
+    audio_file: Path,
+) -> None:
+    with open(audio_file, "rb") as file:
+        requests.put(upload_url, data=file)
+
     return
