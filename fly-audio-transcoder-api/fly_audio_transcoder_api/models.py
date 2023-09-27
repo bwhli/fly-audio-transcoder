@@ -4,29 +4,30 @@ from beanie import Document, Indexed
 from pydantic import BaseModel, Field
 
 
-class InputFormat(BaseModel):
-    format: str
+class AudioFormat(BaseModel):
+    extension: str
     bit_depth: int
     bit_rate: int
     sample_rate: int
 
 
-class OutputFormat(BaseModel):
-    format: str
-    bit_depth: int
-    bit_rate: int
-    sample_rate: int
+class Source(BaseModel):
+    download_url: str | None = None
+    upload_url: str | None = None
+
+
+class Transcode(BaseModel):
+    format: AudioFormat
+    download_url: str | None = None
+    upload_url: str | None = None
 
 
 class Job(Document):
     id: uuid.UUID = Field(default_factory=uuid.uuid4)
     status: Indexed(str) = "created"
     machine_id: Indexed(str) | None = None
-    file_name: str | None = None
-    input_format: InputFormat | None = None
-    output_formats: list[OutputFormat] | None = None
-    download_url: Indexed(str) | None = None
-    upload_url: Indexed(str) | None = None
+    source: Source = Source()
+    transcode: Transcode
 
     class Settings:
         name = "jobs"
