@@ -136,3 +136,5 @@ At this point, the Machine will start up within a few seconds, complete the task
 ## What's Next?
 
 Nothing!
+
+The purpose of this project was to demonstrate how to use Fly's Machines API to run compute workloads on demand.
