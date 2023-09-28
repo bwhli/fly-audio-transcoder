@@ -30,14 +30,11 @@ echo Target Format: ${target_extension}, ${target_bit_rate}k, ${target_sample_ra
 ffmpeg -y -i /tmp/${JOB_ID}.wav -b:a ${target_bit_rate}k -ar ${target_sample_rate} -acodec libmp3lame /tmp/${JOB_ID}.${target_extension}
 
 # Upload the transcoded file to R2.
-curl -X PUT -T /tmp/${JOB_ID}.${target_extension} "$(echo $job_json | jq -r '.data.transcode.upload_url')"
-
 curl -X PUT \
      -T "/tmp/${JOB_ID}.${target_extension}" \
      -H "Content-Type: audio/mpeg" \
      -H "Content-Disposition: attachment;filename=${JOB_ID}.mp3" \
      "$(echo $job_json | jq -r '.data.transcode.upload_url')"
-
 
 # Mark job as complete.
 completed_job_json=$(curl -X POST "${API_URL}/jobs/${JOB_ID}/status/completed/")
