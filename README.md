@@ -30,10 +30,8 @@ To deploy the API app, follow these steps:
 
 1. `cd` into the `fly-audio-transcoder-api` directory, and run `fly launch`. Don't deploy yet.
 2. Create a Flycast (private IPV6) address for the API app with `fly ips allocate-v6 --private`.
-3. Set required secrets for the API app (listed below) with `fly secrets set AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... etc...`.
+3. Set required secrets for the API app (shown below) with `fly secrets set AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... etc...`.
 4. Deploy the API with `fly deploy --vm-size shared-cpu-2x --vm-memory 1024`.
-
-#### Required API App Secrets
 
 |ENVIRONMENT VARIABLE | DESCRIPTION                                                                                                                  |
 |---------------------|------------------------------------------------------------------------------------------------------------------------------|
@@ -45,3 +43,79 @@ To deploy the API app, follow these steps:
 |FLY_ORG_SLUG         |The slug of the Org where API and Worker apps are located.                                                                    |
 |FLY_WORKER_APP_NAME  |The app name of the Worker app.                                                                                               |
 |FLY_WORKER_IMAGE     |The image reference for the Worker app's image (generated in Step 2 of the "Build the Worker section above).                  |
+
+## How it Works
+
+To create a new job, make a POST request to `/jobs/`. The request body is a JSON payload that specifies the target format details.
+
+```
+# The 
+curl -X POST \
+     -H "Content-Type: application/json" \
+     --data '{"transcode": {"format": {"extension": "mp3", "bit_depth": 16, "bit_rate": 192, "sample_rate": 44100}}}' \
+     "https://<YOUR_API_APP_NAME>.fly.dev/jobs/"
+```
+
+The response looks like this:
+
+```
+{
+    '_id': 'b86e9d25-53cb-4421-a19d-cb65f8e2f574',
+    'status': 'created',
+    'machine_id': None,
+    'source': {
+        'download_url': None,
+        'upload_url': 'https://<S3_ENDPOINT_URL>/<S3_BUCKET_NAME>/sources/b86e9d25-53cb-4421-a19d-cb65f8e2f574...'
+    },
+    'transcode': {
+        'format': {'extension': 'mp3', 'bit_depth': 16, 'bit_rate': 192, 'sample_rate': 44100},
+        'download_url': None,
+        'upload_url': None
+    }
+}
+```
+
+Upload a WAV file with the URL stored in `source["upload_url"]`:
+
+```
+curl -X PUT \
+     -H "Content-Type: audio/wav" \
+     -H "Content-Disposition: attachment;filename=<JOB_ID>.wav" \
+     --data-binary "@/path/to/test.wav" \
+     https://<S3_ENDPOINT_URL>/<S3_BUCKET_NAME>/sources/b86e9d25-53cb-4421-a19d-cb65f8e2f574...
+```
+
+Start the job with a POST request to `/jobs/<JOB_ID>/status/started/`:
+
+```
+curl -X POST "<API_URL>/jobs/<JOB_ID>/status/started/"
+```
+
+This endpoint creates a Fly Machine like so:
+
+```
+# Set the API URL and Job ID in the Machine's environment (only applies for this specific Machine).
+machine_env = {
+    "API_URL": f"http://{FLY_APP_NAME}.flycast",
+    "JOB_ID": f"{job.id}",
+}
+
+# Create Fly Machine config to pass to FlyMachine object.
+machine_config = FlyMachineConfig(
+    env=machine_env,
+    image=FLY_WORKER_IMAGE,
+    size="performance-2x",
+    auto_destroy=True,
+    restart=FlyMachineConfigRestart(policy="no"),
+)
+
+# Fetch the Worker app.
+worker_app = Fly(FLY_API_TOKEN).Org(FLY_ORG_SLUG).App(FLY_WORKER_APP_NAME)
+
+# Create the Machine in the Worker app.
+machine = await worker_app.create_machine(
+    FlyMachine(name=str(job.id), config=machine_config),
+)
+```
+
+At this point, the Machine will start up, complete the task, upload the transcoded MP3 file to S3, and all the `/jobs/<JOB_ID>/status/completed/` to generate a presigned download URL for the transcoded file.

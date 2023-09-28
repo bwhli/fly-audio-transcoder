@@ -75,7 +75,7 @@ def main():
 
     # Stage the job.
     job = start_job(job["_id"])
-    print("The job has been staged!")
+    print("The job has been started!")
     print(job)
 
     return
