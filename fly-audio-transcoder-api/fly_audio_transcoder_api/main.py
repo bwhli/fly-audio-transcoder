@@ -5,18 +5,10 @@ from typing import Annotated
 import motor
 from beanie import init_beanie
 from fastapi import Depends, FastAPI, HTTPException, status
-from fly_python_sdk.fly import Fly
-from fly_python_sdk.models.machine import (
-    FlyMachine,
-    FlyMachineConfig,
-    FlyMachineConfigRestart,
-)
-from pydantic import BaseModel
-
 from fly_audio_transcoder_api import (
     DB_URL,
-    FLY_API_APP_NAME,
     FLY_API_TOKEN,
+    FLY_APP_NAME,
     FLY_ORG_SLUG,
     FLY_WORKER_APP_NAME,
     FLY_WORKER_IMAGE,
@@ -27,6 +19,13 @@ from fly_audio_transcoder_api.utils import (
     generate_presigned_s3_download_url,
     generate_presigned_s3_upload_url,
 )
+from fly_python_sdk.fly import Fly
+from fly_python_sdk.models.machine import (
+    FlyMachine,
+    FlyMachineConfig,
+    FlyMachineConfigRestart,
+)
+from pydantic import BaseModel
 
 app = FastAPI()
 
@@ -156,7 +155,7 @@ async def update_job_status_to_started(
     """
     # Create Machine environment.
     machine_env = {
-        "API_URL": f"http://{FLY_API_APP_NAME}.flycast",
+        "API_URL": f"http://{FLY_APP_NAME}.flycast",
         "JOB_ID": f"{job.id}",
     }
 
