@@ -15,6 +15,7 @@ uvicorn = "^0.23.2"
 aioboto3 = "^11.3.0"
 fly-python-sdk = "^0.3.3"
 gunicorn = "^21.2.0"
+rich = "^13.5.3"
 
 
 [build-system]

@@ -1,10 +1,16 @@
-import uuid
+import asyncio
+import logging
+from typing import Annotated
 
 import motor
 from beanie import init_beanie
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, HTTPException, status
 from fly_python_sdk.fly import Fly
-from fly_python_sdk.models.machine import FlyMachine, FlyMachineConfig
+from fly_python_sdk.models.machine import (
+    FlyMachine,
+    FlyMachineConfig,
+    FlyMachineConfigRestart,
+)
 from pydantic import BaseModel
 
 from fly_audio_transcoder_api import (
@@ -15,6 +21,7 @@ from fly_audio_transcoder_api import (
     FLY_WORKER_APP_NAME,
     FLY_WORKER_IMAGE,
 )
+from fly_audio_transcoder_api.dependencies import get_all_jobs_from_db, get_job_from_db
 from fly_audio_transcoder_api.models import Job, Transcode
 from fly_audio_transcoder_api.utils import (
     generate_presigned_s3_download_url,
@@ -36,49 +43,57 @@ async def startup_event():
     )
 
 
+@app.delete("/jobs/")
+async def delete_jobs(
+    jobs: Annotated[
+        list[Job],
+        Depends(get_all_jobs_from_db),
+    ]
+) -> None:
+    """
+    Deletes all jobs in the database along with their associated Fly Machines.
+    Useful for resetting the database for testing purposes.
+    """
+    if len(jobs) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No jobs found.",
+        )
+
+    async def _delete_job_and_machine(
+        job: Job,
+    ):
+        if job.machine_id:
+            machine = (
+                Fly(FLY_API_TOKEN)
+                .Org(FLY_ORG_SLUG)
+                .App(FLY_WORKER_APP_NAME)
+                .Machine(job.machine_id)
+            )
+            await machine.destroy()
+            logging.info(f"Destroyed Machine {job.machine_id}.")
+
+        await job.delete()
+
+        return
+
+    await asyncio.gather(*[_delete_job_and_machine(job) for job in jobs])
+
+    return
+
+
 @app.get("/jobs/")
-async def get_jobs():
-    jobs = await Job.find_all().to_list()
+async def get_jobs(
+    jobs: Annotated[
+        list[Job],
+        Depends(get_all_jobs_from_db),
+    ]
+) -> dict[str, list[Job]]:
+    """
+    Returns a list of jobs in the database.
+    """
     return {
         "data": jobs,
-    }
-
-
-@app.get("/jobs/{job_id}/")
-async def get_job(
-    job_id: uuid.UUID,
-):
-    job = await Job.get(job_id)
-    return {
-        "data": job,
-    }
-
-
-@app.post("/jobs/{job_id}/status/finished/")
-async def complete_job(
-    job_id: uuid.UUID,
-):
-    job = await Job.get(job_id)
-
-    # Destroy the Fly Machine.
-    machine = (
-        Fly(FLY_API_TOKEN)
-        .Org(FLY_ORG_SLUG)
-        .App(FLY_WORKER_APP_NAME)
-        .Machine(job.machine_id)
-    )
-    await machine.destroy()
-
-    # Generate a presigned download URL for transcoded file.
-    job.transcode.download_url = generate_presigned_s3_download_url(
-        object_key=f"transcodes/{job.id}.{job.transcode.format.extension}",
-        expires_in=86400,
-    )
-
-    await job.save()
-
-    return {
-        "data": job,
     }
 
 
@@ -92,8 +107,6 @@ async def create_job(
 ):
     """
     Create a new transcoding job.
-
-
     """
     # Instantiate a new Job object.
     job = Job(
@@ -103,6 +116,8 @@ async def create_job(
     # Create a presigned upload URL based on Job ID.
     job.source.upload_url = await generate_presigned_s3_upload_url(
         object_key=f"sources/{job.id}",
+        content_disposition=f"attachment;filename={job.id}.wav",
+        content_type="audio/wav",
         expires_in=86400,
     )
 
@@ -114,13 +129,31 @@ async def create_job(
     }
 
 
-@app.post("/jobs/{job_id}/transcode/")
-async def transcode_audio_file(
-    job_id: uuid.UUID,
+@app.get("/jobs/{job_id}/")
+async def get_job(
+    job: Annotated[
+        Job,
+        Depends(get_job_from_db),
+    ],
 ):
-    # Fetch job from db.
-    job = await Job.get(job_id)
+    """
+    Returns information about a specific job.
+    """
+    return {
+        "data": job,
+    }
 
+
+@app.post("/jobs/{job_id}/status/started/")
+async def update_job_status_to_started(
+    job: Annotated[
+        Job,
+        Depends(get_job_from_db),
+    ],
+):
+    """
+    This endpoint creates a Fly Machine to transcode the audio file.
+    """
     # Create Machine environment.
     machine_env = {
         "API_URL": f"http://{FLY_API_APP_NAME}.flycast",
@@ -131,31 +164,66 @@ async def transcode_audio_file(
     machine_config = FlyMachineConfig(
         env=machine_env,
         image=FLY_WORKER_IMAGE,
+        size="performance-2x",
+        auto_destroy=True,
+        restart=FlyMachineConfigRestart(policy="no"),
     )
-
-    # Spin up a Fly Machine to transcode the audio file.
-    worker_app = Fly(FLY_API_TOKEN).Org(FLY_ORG_SLUG).App(FLY_WORKER_APP_NAME)
-    machine = await worker_app.create_machine(
-        FlyMachine(name=job.id, config=machine_config),
-    )
-
-    # Store Machine ID in Job object.
-    job.machine_id = machine.id
 
     # Generate a presigned URL to download the source file and store in db.
+    # This URL is used by the Fly Machine to download the source file.
     job.source.download_url = await generate_presigned_s3_download_url(
         object_key=f"sources/{job.id}",
         expires_in=86400,
     )
 
     # Generate a presigned URL which can be used to upload the transcoded file.
+    # This URL is used by the Fly Machine to upload the transcoded file.
     job.transcode.upload_url = await generate_presigned_s3_upload_url(
+        object_key=f"transcodes/{job.id}.{job.transcode.format.extension}",
+        content_disposition=f"attachment;filename={job.id}.mp3",
+        content_type="audio/mpeg",
+        expires_in=86400,
+    )
+
+    # Save generated URLs to db.
+    await job.save()
+
+    # Spin up a Fly Machine to transcode the audio file.
+    worker_app = Fly(FLY_API_TOKEN).Org(FLY_ORG_SLUG).App(FLY_WORKER_APP_NAME)
+    machine = await worker_app.create_machine(
+        FlyMachine(name=str(job.id), config=machine_config),
+    )
+
+    # Store Machine ID in Job object.
+    job.machine_id = machine.id
+
+    # Set job status to "staged".
+    job.status = "started"
+
+    await job.save()
+
+    return {
+        "data": job,
+    }
+
+
+@app.post("/jobs/{job_id}/status/completed/")
+async def update_job_status_to_completed(
+    job: Annotated[
+        Job,
+        Depends(get_job_from_db),
+    ],
+):
+    # Generate a presigned download URL for transcoded file.
+    # This URL is used by the client to download the transcoded file.
+    job.transcode.download_url = await generate_presigned_s3_download_url(
         object_key=f"transcodes/{job.id}.{job.transcode.format.extension}",
         expires_in=86400,
     )
 
-    # Start the Machine.
-    await machine.start()
+    job.status = "completed"
+
+    await job.save()
 
     return {
         "data": job,

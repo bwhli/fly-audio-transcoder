@@ -27,7 +27,7 @@ class Job(Document):
     status: Indexed(str) = "created"
     machine_id: Indexed(str) | None = None
     source: Source = Source()
-    transcode: Transcode
+    transcode: Transcode | None = None
 
     class Settings:
         name = "jobs"
