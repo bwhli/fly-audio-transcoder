@@ -118,4 +118,4 @@ machine = await worker_app.create_machine(
 )
 ```
 
-At this point, the Machine will start up, complete the task, upload the transcoded MP3 file to S3, and all the `/jobs/<JOB_ID>/status/completed/` to generate a presigned download URL for the transcoded file.
+At this point, the Machine will start up within a few seconds, complete the task, upload the transcoded MP3 file to S3, and all the `/jobs/<JOB_ID>/status/completed/` to generate a presigned download URL for the transcoded file. Since the Machine was configured with `auto_destroy=True`, it'll automatically destroy itself after completing its assigned job.
