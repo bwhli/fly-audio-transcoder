@@ -1,6 +1,19 @@
 # Fly Audio Transcoder
 
-This repo contains a basic implementation of an API that transcodes audio from WAV format to MP3 format. This implementation lets you spin up a Fly Machine on demand to handle a specific transcoding job. To do this, the API calls Fly's Machines API directly, which means it doesn't require flyctl (the Fly command line tool) for managing and scaling infrastructure. The purpose of this implementation is to showcase the capabilities and flexibility of the Machines API.
+This repo contains a basic implementation of an API that transcodes audio from WAV format to MP3 format. This implementation lets you spin up a Fly Machine on demand to handle a specific transcoding job. To do this, the API calls Fly's Machines API directly, which means it doesn't require flyctl (the Fly command line tool) for managing and scaling infrastructure.
+
+But why would anyone want to use Fly without flyctl? While flyctl is indeed awesome, I believe it's best suited for smaller-scale and/or tightly-scoped tasks. By "smaller-scale", I mean dozens or hundreds of Machines. By "tightly-scoped", I mean all the Machines within an app are running the same code without customized per-Machine state and workloads defined at startup time. So, if you have a webapp that you want to deploy around the world, flyctl is the way to go. For a use case like an audio transcoding service, it could make more sense to bypass the abstractions provided by flyctl, and utilize the infrastructure directly – that way you won't have to deal with the side effects introduced by using flyctl as a "translator" between your API and Fly's infrastructure.
+
+This project implements an easy to understand pattern.
+
+1. Schedule jobs with an API.
+2. Create job-aware Machines that run jobs and destroy themselves afterward.
+
+IMO, Fly is the best place to implement this kind of pattern for three reasons:
+
+1. Spinning up a Machine is almost instant. Depending on the size of the worker image, you can have something up and running within a few seconds.
+2. You only get billed when a Machine is up and running. There's no need to keep a server running 24/7 to listen for tasks.
+3. You can bring your entire application stack. Unlike traditional serverless offerings with restrictive runtimes, Fly also uses the Dockerfile standard to seed the filesystem on a real VM (not a container).
 
 ## Overview
 
@@ -119,3 +132,7 @@ machine = await worker_app.create_machine(
 ```
 
 At this point, the Machine will start up within a few seconds, complete the task, upload the transcoded MP3 file to S3, and all the `/jobs/<JOB_ID>/status/completed/` to generate a presigned download URL for the transcoded file. Since the Machine was configured with `auto_destroy=True`, it'll automatically destroy itself after completing its assigned job.
+
+## What's Next?
+
+Nothing!
