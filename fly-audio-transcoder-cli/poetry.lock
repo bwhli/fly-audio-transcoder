@@ -172,6 +172,16 @@ files = [
 plugins = ["importlib-metadata"]
 
 [[package]]
+name = "pyperclip"
+version = "1.8.2"
+description = "A cross-platform clipboard module for Python. (Only handles plain text for now.)"
+optional = false
+python-versions = "*"
+files = [
+    {file = "pyperclip-1.8.2.tar.gz", hash = "sha256:105254a8b04934f0bc84e9c24eb360a591aaf6535c9def5f29d92af107a9bf57"},
+]
+
+[[package]]
 name = "rich"
 version = "13.6.0"
 description = "Render rich text, tables, progress bars, syntax highlighting, markdown and more to the terminal"
@@ -235,4 +245,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "b4782d0202d7ff8430d7f1b8ac4b074596ad7bba823eacd3e54ca79c35823a6f"
+content-hash = "1e7bbc0e73df245fe2da6de59d986d45ab75e5b0ed6fb2b8d74dc94d229eb072"

@@ -7,9 +7,10 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.11"
-typer = "^0.9.0"
 httpx = "^0.25.0"
 rich = "^13.6.0"
+typer = "^0.9.0"
+pyperclip = "^1.8.2"
 
 [tool.poetry.scripts]
 fat = "fly_audio_transcoder_cli.main:app"

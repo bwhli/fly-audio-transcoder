@@ -1,9 +1,9 @@
-import json
 import os
 import uuid
 from pathlib import Path
 
 import httpx
+import pyperclip
 import typer
 from rich import print
 
@@ -17,12 +17,26 @@ app = typer.Typer()
 
 @app.command()
 def create_job(
+    target_format: str = typer.Option(
+        "mp3",
+        "--format",
+    ),
+    target_bit_depth: int = typer.Option(
+        16,
+        "--bit-depth",
+    ),
+    target_bit_rate: int = typer.Option(
+        320,
+        "--bit-rate",
+    ),
+    target_sample_rate: int = typer.Option(
+        44100,
+        "--sample-rate",
+    ),
     api_url: str = typer.Option(
         API_URL,
-        help="API URL",
-        envvar="API_URL",
         show_default=True,
-    )
+    ),
 ):
     """
     Create a new transcoding job.
@@ -30,10 +44,10 @@ def create_job(
     payload = {
         "transcode": {
             "format": {
-                "extension": "mp3",
-                "bit_depth": 16,
-                "bit_rate": 256,
-                "sample_rate": 44100,
+                "extension": target_format,
+                "bit_depth": target_bit_depth,
+                "bit_rate": target_bit_rate,
+                "sample_rate": target_sample_rate,
             }
         }
     }
@@ -45,7 +59,8 @@ def create_job(
             json=payload,
         )
 
-    print(json.dumps(r.json()["data"], indent=4))
+    print(r.json()["data"])
+    pyperclip.copy(f"fat upload-source {r.json()['data']['_id']} '{r.json()['data']['source']['upload_url']}' <PATH_TO_SOURCE_FILE>")  # fmt: skip
 
     return
 
@@ -55,8 +70,6 @@ def get_job(
     job_id: uuid.UUID = typer.Argument(...),
     api_url: str = typer.Option(
         API_URL,
-        help="API URL",
-        envvar="API_URL",
         show_default=True,
     ),
 ):
@@ -70,7 +83,7 @@ def get_job(
             f"{api_url}/jobs/{job_id}/",
         )
 
-    print(json.dumps(r.json()["data"], indent=4))
+    print(r.json()["data"])
 
     return
 
@@ -80,8 +93,6 @@ def start_job(
     job_id: uuid.UUID = typer.Argument(...),
     api_url: str = typer.Option(
         API_URL,
-        help="API URL",
-        envvar="API_URL",
         show_default=True,
     ),
 ):
@@ -92,16 +103,17 @@ def start_job(
             f"{api_url}/jobs/{job_id}/status/started/",
         )
 
-    print(json.dumps(r.json()["data"], indent=4))
+    print(r.json()["data"])
+    pyperclip.copy(f"fat get-job {job_id}")
 
     return
 
 
 @app.command()
-def upload_source_file(
+def upload_source(
     job_id: uuid.UUID = typer.Argument(...),
-    source_file: Path = typer.Argument(...),
     upload_url: str = typer.Argument(...),
+    source_file: Path = typer.Argument(...),
 ):
     with open(source_file, "rb") as f:
         with httpx.Client(
@@ -119,5 +131,6 @@ def upload_source_file(
 
     if r.status_code == 200:
         print("Success! Your source file has been uploaded.")
+        pyperclip.copy(f"fat start-job {job_id}")
     else:
         print(f"{r.status_code}: Something went wrong. Please try again.")
