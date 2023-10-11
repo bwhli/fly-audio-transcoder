@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "fly-audio-transcoder-cli"
+version = "0.1.0"
+description = ""
+authors = ["Brian Li <brian@brianli.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+typer = "^0.9.0"
+httpx = "^0.25.0"
+rich = "^13.6.0"
+
+[tool.poetry.scripts]
+fat = "fly_audio_transcoder_cli.main:app"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
