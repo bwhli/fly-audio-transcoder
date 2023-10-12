@@ -1,10 +1,19 @@
 import os
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from time import sleep
 
 import httpx
 import pyperclip
 import typer
+from fly_audio_transcoder_cli.utils import (
+    _create_job,
+    _do,
+    _get_job,
+    _start_job,
+    _upload_source,
+)
 from rich import print
 
 API_URL = os.getenv(
@@ -13,6 +22,28 @@ API_URL = os.getenv(
 )
 
 app = typer.Typer()
+
+
+@app.command()
+def do(
+    concurrency: int = typer.Option(
+        1,
+        "--concurrency",
+        "-c",
+    )
+):
+    with ThreadPoolExecutor(max_workers=concurrency + 1) as executor:
+        results = [
+            executor.submit(_do, "mp3", 16, 320, 44100, API_URL)
+            for _ in range(concurrency)
+        ]
+
+    transcode_download_urls = []
+
+    for result in results:
+        print(result.result())
+
+    return
 
 
 @app.command()
@@ -41,27 +72,15 @@ def create_job(
     """
     Create a new transcoding job.
     """
-    payload = {
-        "transcode": {
-            "format": {
-                "extension": target_format,
-                "bit_depth": target_bit_depth,
-                "bit_rate": target_bit_rate,
-                "sample_rate": target_sample_rate,
-            }
-        }
-    }
-    with httpx.Client(
-        timeout=10,
-    ) as client:
-        r = client.post(
-            f"{api_url}/jobs/",
-            json=payload,
-        )
-
+    r = _create_job(
+        target_format,
+        target_bit_depth,
+        target_bit_rate,
+        target_sample_rate,
+        api_url,
+    )
     print(r.json()["data"])
     pyperclip.copy(f"fat upload-source {r.json()['data']['_id']} '{r.json()['data']['source']['upload_url']}' <PATH_TO_SOURCE_FILE>")  # fmt: skip
-
     return
 
 
@@ -78,15 +97,11 @@ def get_job(
     """
     Returns information about a specific job.
     """
-    with httpx.Client(
-        timeout=10,
-    ) as client:
-        r = client.get(
-            f"{api_url}/jobs/{job_id}/",
-        )
-
+    r = _get_job(
+        job_id,
+        api_url,
+    )
     print(r.json()["data"])
-
     return
 
 
@@ -104,16 +119,13 @@ def start_job(
         show_default=True,
     ),
 ):
-    with httpx.Client(
-        timeout=10,
-    ) as client:
-        r = client.post(
-            f"{api_url}/jobs/{job_id}/status/started/?machine_size={machine_size}",
-        )
-
+    r = _start_job(
+        job_id,
+        machine_size,
+        api_url,
+    )
     print(r.json()["data"])
     pyperclip.copy(f"fat get-job {job_id}")
-
     return
 
 
@@ -129,20 +141,11 @@ def upload_source(
         ...,
     ),
 ):
-    with open(source_file, "rb") as f:
-        with httpx.Client(
-            timeout=10,
-        ) as client:
-            headers = {
-                "content-type": "audio/wav",
-                "content-disposition": f"attachment;filename={job_id}.wav",
-            }
-            r = client.put(
-                upload_url,
-                headers=headers,
-                data=f,
-            )
-
+    r = _upload_source(
+        job_id,
+        upload_url,
+        source_file,
+    )
     if r.status_code == 200:
         print("Success! Your source file has been uploaded.")
         pyperclip.copy(f"fat start-job {job_id}")
