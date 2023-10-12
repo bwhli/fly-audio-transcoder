@@ -67,7 +67,9 @@ def create_job(
 
 @app.command()
 def get_job(
-    job_id: uuid.UUID = typer.Argument(...),
+    job_id: uuid.UUID = typer.Argument(
+        ...,
+    ),
     api_url: str = typer.Option(
         API_URL,
         show_default=True,
@@ -90,7 +92,13 @@ def get_job(
 
 @app.command()
 def start_job(
-    job_id: uuid.UUID = typer.Argument(...),
+    job_id: uuid.UUID = typer.Argument(
+        ...,
+    ),
+    machine_size: str = typer.Option(
+        "performance-2x",
+        "--machine-size",
+    ),
     api_url: str = typer.Option(
         API_URL,
         show_default=True,
@@ -100,7 +108,7 @@ def start_job(
         timeout=10,
     ) as client:
         r = client.post(
-            f"{api_url}/jobs/{job_id}/status/started/",
+            f"{api_url}/jobs/{job_id}/status/started/?machine_size={machine_size}",
         )
 
     print(r.json()["data"])
@@ -111,9 +119,15 @@ def start_job(
 
 @app.command()
 def upload_source(
-    job_id: uuid.UUID = typer.Argument(...),
-    upload_url: str = typer.Argument(...),
-    source_file: Path = typer.Argument(...),
+    job_id: uuid.UUID = typer.Argument(
+        ...,
+    ),
+    upload_url: str = typer.Argument(
+        ...,
+    ),
+    source_file: Path = typer.Argument(
+        ...,
+    ),
 ):
     with open(source_file, "rb") as f:
         with httpx.Client(

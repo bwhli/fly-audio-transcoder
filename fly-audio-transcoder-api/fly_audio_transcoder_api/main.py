@@ -149,6 +149,7 @@ async def update_job_status_to_started(
         Job,
         Depends(get_job_from_db),
     ],
+    machine_size: str = "performance-2x",
 ):
     """
     This endpoint creates a Fly Machine to transcode the audio file.
@@ -163,7 +164,7 @@ async def update_job_status_to_started(
     machine_config = FlyMachineConfig(
         env=machine_env,
         image=FLY_WORKER_IMAGE,
-        size="performance-2x",
+        size=machine_size,
         auto_destroy=True,
         restart=FlyMachineConfigRestart(policy="no"),
     )
